@@ -58,7 +58,6 @@
             animation: fadeIn 0.3s ease-out forwards;
         }
         
-        /* UPDATED VISUAL STATES */
         .status-active-long {
             border: 2px solid #10b981 !important;
             background: linear-gradient(180deg, rgba(6, 78, 59, 0.4) 0%, rgba(30, 41, 59, 0.7) 100%) !important;
@@ -87,7 +86,6 @@
             100% { opacity: 0; }
         }
         
-        /* Toggles Active State */
         .toggle-active {
             background-color: #8b5cf6 !important;
             color: white !important;
@@ -272,8 +270,6 @@
         let isVoiceEnabled = false;
         let visibleCount = 2;
         let socket = null;
-        
-        // Data Store (Key: Ticker, Value: Object)
         let marketData = {}; 
 
         function loadSettings() {
@@ -328,7 +324,34 @@
             btn.classList.toggle('hidden', visibleCount >= 6);
         }
 
-        // --- PERSISTENCE ---
+        function clearInputs() {
+            if(confirm('Clear all inputs and reset rows?')) {
+                // Clear inputs
+                document.querySelectorAll('.ticker-input').forEach(i => i.value = '');
+                document.querySelectorAll('.trigger-input').forEach(i => i.value = '');
+                
+                // Reset Rows to 2
+                visibleCount = 2;
+                localStorage.setItem('visibleCount', visibleCount);
+                updateVisibleRows();
+
+                // Save empty state
+                saveInputs();
+                
+                // Clear Results
+                document.getElementById('resultsContainer').innerHTML = '';
+                
+                // Reset Connection State
+                marketData = {}; 
+                if (socket) {
+                    socket.close();
+                    document.getElementById('socketText').innerText = "OFFLINE";
+                    document.getElementById('socketText').className = "text-gray-500";
+                    document.getElementById('socketDot').className = "dot-dead";
+                }
+            }
+        }
+
         function saveInputs() {
             localStorage.setItem('riskValue', document.getElementById('riskValue').value);
             localStorage.setItem('slippageValue', document.getElementById('slippageValue').value);
@@ -400,24 +423,15 @@
             const cards = Array.from(container.children);
             
             cards.forEach(card => {
-                const ticker = card.id.replace('card-', '');
-                const data = marketData[ticker];
-                
                 if (!isFocusMode) {
                     card.style.display = 'block';
                 } else {
-                    // Check if Active
-                    let isActive = false;
-                    const isGreenDay = data.c > data.pc;
-                    if (data.trigger) {
-                        if (isGreenDay && data.c >= data.trigger) isActive = true;
-                        if (!isGreenDay && data.c <= data.trigger) isActive = true;
-                    }
-
-                    if (isActive) {
-                        card.style.display = 'block';
-                    } else {
+                    // Check if it's "Wait"
+                    const inner = card.querySelector('.glass-card');
+                    if (inner && inner.classList.contains('status-wait')) {
                         card.style.display = 'none';
+                    } else {
+                        card.style.display = 'block';
                     }
                 }
             });
@@ -436,15 +450,6 @@
                 btn.classList.remove('voice-active');
                 btn.classList.add('bg-slate-800', 'text-gray-400');
                 window.speechSynthesis.cancel();
-            }
-        }
-
-        function clearInputs() {
-            if(confirm('Clear all inputs?')) {
-                document.querySelectorAll('.ticker-input').forEach(i => i.value = '');
-                document.querySelectorAll('.trigger-input').forEach(i => i.value = '');
-                saveInputs();
-                document.getElementById('resultsContainer').innerHTML = '';
             }
         }
 
@@ -518,13 +523,11 @@
             socket.addEventListener('message', function (event) {
                 const message = JSON.parse(event.data);
                 if (message.type === 'trade') {
-                    // Finnhub sends batched trades
                     message.data.forEach(trade => {
                         const ticker = trade.s;
                         const price = trade.p;
-                        // Only update if we track this ticker
                         if (marketData[ticker]) {
-                            marketData[ticker].c = price;
+                            marketData[ticker].c = price; 
                             updateCard(ticker);
                         }
                     });
@@ -542,7 +545,7 @@
             });
         }
 
-        // --- API FETCHERS ---
+        // --- API FETCHERS (STATIC DATA) ---
         async function fetchTickerData(ticker, provider, apiKey) {
             if (provider === 'twelvedata') {
                 const quote = await fetch(`https://api.twelvedata.com/quote?symbol=${ticker}&apikey=${apiKey}`);
@@ -580,6 +583,8 @@
             const inputs = Array.from(document.querySelectorAll('.ticker-input'));
             const triggers = Array.from(document.querySelectorAll('.trigger-input'));
             const tasks = [];
+            
+            // Only iterate up to visibleCount
             for(let i=0; i<visibleCount; i++) {
                  const ticker = inputs[i].value.trim().toUpperCase();
                  const trigger = parseFloat(triggers[i].value);
@@ -613,7 +618,7 @@
                             h: res.data.h,
                             l: res.data.l,
                             pc: res.data.pc,
-                            c: res.data.c,
+                            c: res.data.c, 
                             trigger: res.trigger,
                             spoken: false 
                         };
@@ -735,7 +740,7 @@
             cardInner.className = `glass-card rounded-xl p-5 animate-fade-in transition-colors duration-200 ${isActive ? (isGreenDay ? 'status-active-long' : 'status-active-short') : 'status-wait'}`;
 
             if (isFocusMode && isActive) {
-                cardEl.style.display = 'block';
+                cardEl.style.display = 'block'; 
             } else if (isFocusMode && !isActive) {
                 cardEl.style.display = 'none';
             }
